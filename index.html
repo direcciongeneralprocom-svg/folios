@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generador de Formato de Operaciones</title>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<style>
+  :root { --azul:#1d4ed8; --gris:#f4f5f7; --borde:#d9dce1; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 760px; margin: 32px auto; padding: 0 16px; color:#1f2430; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  p.sub { color:#5a6270; margin-top:0; }
+  fieldset { border:1px solid var(--borde); border-radius:10px; padding:16px 18px; margin-bottom:18px; background:#fff; }
+  legend { font-weight:600; padding:0 6px; }
+  label { display:block; font-size:.85rem; margin:10px 0 4px; color:#33384a; }
+  select, input, textarea { width:100%; padding:8px 10px; border:1px solid var(--borde); border-radius:6px; font-size:.95rem; }
+  textarea { resize:vertical; min-height:60px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  button { background:var(--azul); color:#fff; border:none; padding:11px 22px; border-radius:8px; font-size:1rem; cursor:pointer; margin-top:6px; }
+  button:disabled { background:#9aa3b5; cursor:not-allowed; }
+  button.secundario { background:#fff; color:var(--azul); border:1px solid var(--azul); }
+  #estado { margin-top:14px; padding:10px 12px; border-radius:8px; font-size:.9rem; display:none; }
+  #estado.ok { display:block; background:#e8f7ee; color:#15703f; border:1px solid #b6e6c8; }
+  #estado.error { display:block; background:#fdeceb; color:#a3271c; border:1px solid #f4c4be; }
+  #estado.info { display:block; background:#eef2ff; color:#2a3a8c; border:1px solid #cdd5f6; }
+  .nota { font-size:.78rem; color:#6b7280; margin-top:2px; }
+  .pdf-preview { margin-top:10px; }
+  .pdf-preview a { color:var(--azul); font-size:.9rem; }
+  .oculto { display:none; }
+</style>
+</head>
+<body>
+  <h1>Generador de Formato de Operaciones</h1>
+  <p class="sub">Sube la factura (PDF + XML), elige el cliente y descarga el Excel ya rellenado. Todo se procesa en tu navegador; nada se sube a ningún servidor.</p>
+
+  <fieldset>
+    <legend>1. Cliente</legend>
+    <label for="cliente">Selecciona el cliente</label>
+    <select id="cliente">
+      <option value="">-- Selecciona --</option>
+      <option value="pape">Luis Pape</option>
+      <option value="berna">Berna</option>
+      <option value="estela">Estela H</option>
+      <option value="avila">Luis Avila</option>
+    </select>
+  </fieldset>
+
+  <fieldset>
+    <legend>2. Archivos de la factura</legend>
+    <label for="xmlFile">XML (CFDI) — obligatorio, de aquí se extraen los datos</label>
+    <input type="file" id="xmlFile" accept=".xml">
+    <label for="pdfFile">PDF de la factura — se adjunta como respaldo</label>
+    <input type="file" id="pdfFile" accept=".pdf">
+    <div class="pdf-preview" id="pdfPreview"></div>
+  </fieldset>
+
+  <fieldset id="datosFieldset" class="oculto">
+    <legend>3. Datos extraídos / a completar</legend>
+    <p class="nota">El XML no incluye la dirección completa del cliente ni fechas de pago/devolución: complétalas aquí si las necesitas.</p>
+
+    <div class="row2">
+      <div><label>Empresa emisora</label><input id="f_empresa" disabled></div>
+      <div><label>No. de factura</label><input id="f_folio" disabled></div>
+    </div>
+    <div class="row2">
+      <div><label>Cliente (receptor)</label><input id="f_cliente" disabled></div>
+      <div><label>RFC</label><input id="f_rfc" disabled></div>
+    </div>
+    <div class="row3">
+      <div><label>Calle y número</label><input id="f_calle" placeholder="(no viene en el XML)"></div>
+      <div><label>Colonia</label><input id="f_colonia"></div>
+      <div><label>Ciudad / Estado</label><input id="f_ciudad"></div>
+    </div>
+    <div class="row3">
+      <div><label>C.P.</label><input id="f_cp"></div>
+      <div><label>Folio interno</label><input id="f_folio_interno" placeholder="opcional"></div>
+      <div><label>Unidad (concepto)</label><input id="f_unidad" placeholder="SERVICIO"></div>
+    </div>
+    <div class="row3">
+      <div><label>Fecha de emisión</label><input id="f_fecha_emision" disabled></div>
+      <div><label>Fecha de pago</label><input id="f_fecha_pago" type="date"></div>
+      <div><label>Fecha de devolución</label><input id="f_fecha_devolucion" type="date"></div>
+    </div>
+    <div>
+      <label>Concepto</label>
+      <textarea id="f_concepto" disabled></textarea>
+    </div>
+    <div class="row3">
+      <div><label>Subtotal</label><input id="f_subtotal" disabled></div>
+      <div><label>Total factura</label><input id="f_total" disabled></div>
+      <div><label>Régimen / Uso CFDI / Forma de pago</label><input id="f_extra" disabled></div>
+    </div>
+
+    <button id="btnGenerar">Generar y descargar Excel</button>
+  </fieldset>
+
+  <div id="estado"></div>
+
+  <script src="app.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let cfdiData = null;
+
+    function setEstado(msg, tipo) {
+      const el = $("estado");
+      el.textContent = msg;
+      el.className = tipo || "";
+    }
+
+    $("xmlFile").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        cfdiData = parseCFDI(text);
+        rellenarFormulario(cfdiData);
+        $("datosFieldset").classList.remove("oculto");
+        setEstado("XML leído correctamente. Revisa los datos antes de generar el Excel.", "ok");
+      } catch (err) {
+        cfdiData = null;
+        $("datosFieldset").classList.add("oculto");
+        setEstado("Error leyendo el XML: " + err.message, "error");
+      }
+    });
+
+    $("pdfFile").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      const prev = $("pdfPreview");
+      prev.innerHTML = "";
+      if (file) {
+        const url = URL.createObjectURL(file);
+        prev.innerHTML = `<a href="${url}" target="_blank">Ver PDF adjunto (${file.name})</a>`;
+      }
+    });
+
+    function rellenarFormulario(d) {
+      $("f_empresa").value = d.emisor.nombre;
+      $("f_folio").value = d.folio;
+      $("f_cliente").value = d.receptor.nombre;
+      $("f_rfc").value = d.receptor.rfc;
+      $("f_cp").value = d.receptor.domicilioFiscal;
+      $("f_fecha_emision").value = formatFecha(d.fecha);
+      $("f_concepto").value = descripcionCombinada(d.conceptos);
+      $("f_subtotal").value = d.subTotal.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
+      $("f_total").value = d.total.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
+      $("f_extra").value = `${d.receptor.regimenFiscal} / ${d.receptor.usoCFDI} / ${d.formaPago}-${d.metodoPago}`;
+    }
+
+    $("btnGenerar").addEventListener("click", async () => {
+      const clienteKey = $("cliente").value;
+      if (!clienteKey) { setEstado("Selecciona un cliente.", "error"); return; }
+      if (!cfdiData) { setEstado("Sube primero el XML de la factura.", "error"); return; }
+
+      const extras = {
+        calle: $("f_calle").value,
+        colonia: $("f_colonia").value,
+        ciudad: $("f_ciudad").value,
+        cp: $("f_cp").value,
+        folioInterno: $("f_folio_interno").value,
+        unidadLabel: $("f_unidad").value,
+        fechaPago: $("f_fecha_pago").value,
+        fechaDevolucion: $("f_fecha_devolucion").value,
+      };
+
+      try {
+        $("btnGenerar").disabled = true;
+        setEstado("Generando Excel…", "info");
+        const blob = await generarExcel(clienteKey, cfdiData, extras);
+        const nombre = `FOLIO ${cfdiData.folio || "SIN-FOLIO"} ${CLIENTES[clienteKey].label}.xlsx`;
+        descargarBlob(blob, nombre);
+        setEstado("Excel generado y descargado: " + nombre, "ok");
+      } catch (err) {
+        setEstado("Error generando el Excel: " + err.message, "error");
+      } finally {
+        $("btnGenerar").disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
