@@ -74,11 +74,16 @@ const FORMAPAGO_CORTO = {
 
 // ---------- Configuración por cliente ----------
 const CLIENTES = {
-  pape:   { label: "Luis Pape",  template: "templates/template_pape.xlsx",   sheet: "FACTURA", tipo: "A" },
-  estela: { label: "Estela H",   template: "templates/template_estela.xlsx", sheet: "FACTURA", tipo: "A" },
-  avila:  { label: "Luis Avila", template: "templates/template_avila.xlsx",  sheet: "FACTURA", tipo: "A" },
+  pape:   { label: "Luis Pape",  template: "templates/template_pape.xlsx",   sheet: "FACTURA", tipo: "A", pisoRow: 77 },
+  estela: { label: "Estela H",   template: "templates/template_estela.xlsx", sheet: "FACTURA", tipo: "A", pisoRow: 71 },
+  avila:  { label: "Luis Avila", template: "templates/template_avila.xlsx",  sheet: "FACTURA", tipo: "A", pisoRow: 61 },
   berna:  { label: "Berna",      template: "templates/template_berna.xlsx", sheet: "Factura", tipo: "B" },
 };
+
+// PISO: 1% del subtotal si la empresa emisora es BESTEN, 2.3% para cualquier otra empresa.
+function calcularPisoPct(nombreEmisor) {
+  return /besten/i.test(nombreEmisor || "") ? 0.01 : 0.023;
+}
 
 function regimenTipo(codigo) {
   const personaMoral = ["601", "603", "606", "608", "610", "611", "620", "622", "623", "624", "625", "626"];
@@ -202,6 +207,11 @@ async function generarExcel(clienteKey, datos, extras) {
     ws.getCell("G30").value = claveProdServ ? Number(claveProdServ) : claveProdServ;
     ws.getCell("H30").value = cantidadTotal;
     ws.getCell("I30").value = cantidadTotal ? importeTotal / cantidadTotal : importeTotal;
+
+    // PISO: 1% del subtotal si la empresa emisora es BESTEN, 2.3% para las demás empresas.
+    const pisoPct = calcularPisoPct(datos.emisor.nombre);
+    ws.getCell(`G${cfg.pisoRow}`).value = { formula: `J31*${pisoPct}` };
+    ws.getCell(`C${cfg.pisoRow}`).value = `PISO ${(pisoPct * 100).toFixed(1)}%`;
   } else {
     // Tipo B - plantilla Berna
     ws.getCell("C4").value = datos.emisor.nombre;
@@ -237,30 +247,4 @@ function formatMonto(valor) {
 }
 
 function limpiarNombre(texto) {
-  // Quita caracteres no válidos para nombres de archivo en Windows/Mac y espacios duplicados
-  return String(texto || "")
-    .replace(/[\\/:*?"<>|]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function nombreArchivo(clienteKey, datos) {
-  const broker = CLIENTES[clienteKey].label;
-  const folio = datos.folio || "SIN-FOLIO";
-  const clienteReceptor = datos.receptor.nombre || "";
-  const empresaEmisora = datos.emisor.nombre || "";
-  const monto = "$" + formatMonto(datos.total);
-  const partes = [`Folio ${folio}`, broker, clienteReceptor, empresaEmisora, monto];
-  return limpiarNombre(partes.join(" ")) + ".xlsx";
-}
-
-function descargarBlob(blob, nombre) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nombre;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
+  // Quita caractere
