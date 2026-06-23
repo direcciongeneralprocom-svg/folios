@@ -168,7 +168,7 @@
         $("btnGenerar").disabled = true;
         setEstado("Generando Excel…", "info");
         const blob = await generarExcel(clienteKey, cfdiData, extras);
-        const nombre = `FOLIO ${cfdiData.folio || "SIN-FOLIO"} ${CLIENTES[clienteKey].label}.xlsx`;
+        const nombre = nombreArchivo(clienteKey, cfdiData);
         descargarBlob(blob, nombre);
         setEstado("Excel generado y descargado: " + nombre, "ok");
       } catch (err) {

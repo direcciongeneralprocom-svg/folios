@@ -231,6 +231,29 @@ async function generarExcel(clienteKey, datos, extras) {
   return new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }
 
+// ---------- Nombre del archivo descargado ----------
+function formatMonto(valor) {
+  return Number(valor || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function limpiarNombre(texto) {
+  // Quita caracteres no válidos para nombres de archivo en Windows/Mac y espacios duplicados
+  return String(texto || "")
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function nombreArchivo(clienteKey, datos) {
+  const broker = CLIENTES[clienteKey].label;
+  const folio = datos.folio || "SIN-FOLIO";
+  const clienteReceptor = datos.receptor.nombre || "";
+  const empresaEmisora = datos.emisor.nombre || "";
+  const monto = "$" + formatMonto(datos.total);
+  const partes = [`Folio ${folio}`, broker, clienteReceptor, empresaEmisora, monto];
+  return limpiarNombre(partes.join(" ")) + ".xlsx";
+}
+
 function descargarBlob(blob, nombre) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
