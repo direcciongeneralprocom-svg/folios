@@ -247,4 +247,30 @@ function formatMonto(valor) {
 }
 
 function limpiarNombre(texto) {
-  // Quita caractere
+  // Quita caracteres no válidos para nombres de archivo en Windows/Mac y espacios duplicados
+  return String(texto || "")
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function nombreArchivo(clienteKey, datos) {
+  const broker = CLIENTES[clienteKey].label;
+  const folio = datos.folio || "SIN-FOLIO";
+  const clienteReceptor = datos.receptor.nombre || "";
+  const empresaEmisora = datos.emisor.nombre || "";
+  const monto = "$" + formatMonto(datos.total);
+  const partes = [`Folio ${folio}`, broker, clienteReceptor, empresaEmisora, monto];
+  return limpiarNombre(partes.join(" ")) + ".xlsx";
+}
+
+function descargarBlob(blob, nombre) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombre;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
